@@ -1,0 +1,52 @@
+[
+  {
+    "author": "Aldous Huxley",
+    "title": "Brave New World",
+    "year": 1932
+  },
+  {
+    "author": "Anthony Burgess",
+    "title": "A Clockwork Orange",
+    "year": 1962
+  },
+  {
+    "author": "Charles Webb",
+    "title": "The Graduate",
+    "year": 1963
+  },
+  {
+    "author": "George Orwell",
+    "title": "Nineteen Eighty-Four",
+    "year": 1949
+  },
+  {
+    "author": "John Steinbeck",
+    "title": "Of Mice and Men",
+    "year": 1937
+  },
+  {
+    "author": "Ken Kesey",
+    "title": "One Flew Over the Cuckoo’s Nest",
+    "year": 1962
+  },
+  {
+    "author": "Mikhail Bulgakov",
+    "title": "The Master and Margarita",
+    "year": 1967
+  },
+  {
+    "author": "Stephen King",
+    "title": "The Stand",
+    "year": 1978
+  },
+  {
+    "author": "Thomas Harris",
+    "title": "Silence of the Lambs",
+    "year": 1988
+  },
+  {
+    "author": "Vladimir Nabokov",
+    "title": "Lolita",
+    "year": 1955
+  }
+]

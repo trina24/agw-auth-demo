@@ -1,0 +1,238 @@
+service: agw-auth
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'demo'}
+  runtime: python3.7
+  region: ${self:custom.awsConfig.region}
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - 'dynamodb:*'
+      Resource:
+        Fn::Join:
+          - ''
+          - - 'arn:aws:dynamodb:'
+            - ${self:custom.awsConfig.region}
+            - ':'
+            - Ref: 'AWS::AccountId'
+            - ':table/'
+            - Ref: dynamoTable
+  environment:
+    ACCOUNT_ID: ${self:custom.accountId}
+    API_URL: { "Fn::Join": ["", [" https://", { "Ref": "ApiGatewayRestApi" }, ".execute-api.${self:custom.awsConfig.region}.amazonaws.com/${self:provider.stage}" ] ]  }
+    COGNITO_APP_CLIENT_ID:
+      Ref: cognitoUserPoolClient
+    COGNITO_USERPOOL_ID:
+      Ref: cognitoUserPool
+  versionFunctions: false
+
+functions:
+  hybrid-auth:
+    handler: src/auth/hybrid.handler
+    name: ${self:service}-${self:provider.stage}-hybrid-auth
+    events:
+      - http:
+          path: /auth
+          method: get
+          authorizer: aws_iam
+          integration: mock
+          request:
+            template:
+              application/json: '{"statusCode": 200}'
+          response:
+            template: '{"caller_arn" : "$context.identity.userArn"}'
+            statusCodes:
+              200:
+                pattern: ''
+  token-auth:
+    handler: src/auth/token.handler
+    name: ${self:service}-${self:provider.stage}-token-auth
+  books-add:
+    handler: wsgi_handler.handler
+    name: ${self:service}-${self:provider.stage}-books-add
+    events:
+      - http:
+          path: /books
+          method: post
+          authorizer:
+            name: hybrid-auth
+            type: request
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 600
+  books-get:
+    handler: wsgi_handler.handler
+    name: ${self:service}-${self:provider.stage}-books-get
+    events:
+      - http:
+          path: /books
+          method: get
+          authorizer:
+            name: token-auth
+            type: token
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 600
+  book-delete:
+    handler: wsgi_handler.handler
+    name: ${self:service}-${self:provider.stage}-book-delete
+    events:
+      - http:
+          path: /books/{id}
+          method: delete
+          authorizer: aws_iam
+  book-get:
+    handler: wsgi_handler.handler
+    name: ${self:service}-${self:provider.stage}-book-get
+    events:
+      - http:
+          path: /books/{id}
+          method: get
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+  import:
+    handler: src.imports.handler
+    name: ${self:service}-${self:provider.stage}-import
+    role: ExternalLambdaRole
+
+
+resources:
+  Resources:
+    dynamoTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+          - AttributeName: author
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: created_at
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: author-index
+            KeySchema:
+                - AttributeName: author
+                  KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    cognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${self:provider.stage}-user-pool
+    cognitoUserPoolDomain:
+      Type: AWS::Cognito::UserPoolDomain
+      Properties:
+        Domain: ${self:custom.awsConfig.domainName}
+        UserPoolId: !Ref cognitoUserPool
+    cognitoUserPoolIdentityProvider:
+      Type: AWS::Cognito::UserPoolIdentityProvider
+      Properties:
+        AttributeMapping:
+          email: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
+        ProviderDetails:
+          MetadataURL: ${self:custom.awsConfig.oktaMetadata}
+        ProviderName: Okta
+        ProviderType: SAML
+        UserPoolId: !Ref cognitoUserPool
+    cognitoUserPoolClient:
+      Type: 'AWS::Cognito::UserPoolClient'
+      Properties:
+        ClientName: ${self:service}-${self:provider.stage}-user-pool-client
+        UserPoolId: !Ref cognitoUserPool
+        SupportedIdentityProviders:
+          - !Ref cognitoUserPoolIdentityProvider
+        CallbackURLs:
+          - 'http://localhost:8080/login'
+        LogoutURLs:
+          - 'http://localhost:8080'
+        AllowedOAuthFlowsUserPoolClient: true
+        AllowedOAuthFlows:
+          - code
+          - implicit
+        AllowedOAuthScopes:
+          - email
+          - openid
+          - profile
+        ReadAttributes:
+          - email
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoUserPool
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ProviderARNs:
+          - Fn::GetAtt:
+              - cognitoUserPool
+              - Arn
+    ExternalLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: sts:AssumeRole
+              Principal:
+                Service: lambda.amazonaws.com
+        RoleName: ${self:service}-${self:provider.stage}-external-lambda-role
+        Policies:
+          - PolicyName: ${self:service}-${self:provider.stage}-external-lambda-role-policy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource:
+                    - 'Fn::Join':
+                        - ':'
+                        - - 'arn:aws:logs'
+                          - Ref: 'AWS::Region'
+                          - Ref: 'AWS::AccountId'
+                          - 'log-group:/aws/lambda/*:*:*'
+                - Effect: "Allow"
+                  Action:
+                    - "execute-api:*"
+                  Resource:
+                    - 'Fn::Join':
+                        - ':'
+                        - - 'arn:aws:execute-api'
+                          - Ref: 'AWS::Region'
+                          - Ref: 'AWS::AccountId'
+                          - '*'
+  Outputs:
+    ClientId:
+      Value: !Ref cognitoUserPoolClient
+    UserPoolId:
+      Value: !Ref cognitoUserPool
+
+
+plugins:
+  - serverless-python-requirements
+  - serverless-wsgi
+
+custom:
+  accountId: { Ref: 'AWS::AccountId' }
+  awsConfig: ${file(aws-config.yml)}
+  pythonRequirements:
+    dockerizePip: false
+  wsgi:
+    app: src/app.app

@@ -1,0 +1,8 @@
+boto3==1.16.33
+falcon==2.0.0
+prettyconf==2.1.0
+pynamodb==4.3.3
+python-jose==3.2.0
+requests==2.25.0
+requests-aws4auth==1.0.1
+Werkzeug==1.0.1
