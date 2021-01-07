@@ -20,7 +20,7 @@ provider:
             - Ref: dynamoTable
   environment:
     ACCOUNT_ID: ${self:custom.accountId}
-    API_URL: { "Fn::Join": ["", [" https://", { "Ref": "ApiGatewayRestApi" }, ".execute-api.${self:custom.awsConfig.region}.amazonaws.com/${self:provider.stage}" ] ]  }
+    API_URL: { "Fn::Join": ["", ["https://", { "Ref": "ApiGatewayRestApi" }, ".execute-api.${self:custom.awsConfig.region}.amazonaws.com/${self:provider.stage}" ] ]  }
     COGNITO_APP_CLIENT_ID:
       Ref: cognitoUserPoolClient
     COGNITO_USERPOOL_ID:
