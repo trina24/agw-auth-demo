@@ -44,7 +44,11 @@ In repository root folder create `aws-config.yml` file with following keys:
 - `oktaMetadata`: leave it blank, you will fill it later,
 - `region`: selected AWS Region (example: `eu-west-1`).
 
-**Note:** to check domain prefix availability in your region, enter `https://<your-domain-prefix>.auth.<aws-region>.amazoncognito.com/` in a web browser. If you don't get any response, the domain is available.
+**Note:** to check domain prefix availability in your region, enter 
+
+```https://<your-domain-prefix>.auth.<aws-region>.amazoncognito.com/```
+ 
+ in a web browser. If you don't get any response, the domain is available.
 
 ## OKTA configuration & deployment to AWS
 
